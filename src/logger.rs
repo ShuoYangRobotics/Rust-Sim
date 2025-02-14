@@ -1,9 +1,12 @@
 use chrono::Utc;
 use nalgebra::DVector;
+use plotters::prelude::*;
 use serde_json::json;
-use std::fs::OpenOptions;
+use std::fs::{self, File, OpenOptions};
 use std::io::Write;
+use std::io::{BufRead, BufReader};
 use std::sync::{Arc, Mutex};
+use tempfile::tempfile;
 
 pub struct Logger {
     file: Arc<Mutex<std::fs::File>>,
@@ -13,7 +16,9 @@ pub struct Logger {
 impl Logger {
     pub fn new() -> Self {
         let now = Utc::now();
-        let filename = format!("least_squares_log_{}.txt", now.format("%Y%m%d_%H%M%S"));
+        let filename = format!("log/least_squares_log_{}.txt", now.format("%Y%m%d_%H%M%S"));
+
+        fs::create_dir_all("log").expect("Unable to create log directory");
 
         let file = OpenOptions::new()
             .create(true)
@@ -23,6 +28,15 @@ impl Logger {
 
         Logger {
             file: Arc::new(Mutex::new(file)),
+            counter: Arc::new(Mutex::new(0)),
+        }
+    }
+
+    pub fn new_for_analysis() -> Self {
+        let temp_file = tempfile().expect("Unable to create temporary file");
+
+        Logger {
+            file: Arc::new(Mutex::new(temp_file)),
             counter: Arc::new(Mutex::new(0)),
         }
     }
@@ -44,6 +58,66 @@ impl Logger {
         file.write_all(log_entry.as_bytes())
             .expect("Unable to write to log file");
         file.sync_all().expect("Unable to sync log file");
+    }
+
+    pub fn analyze(&self, filename: &str) {
+        let file = File::open(filename).expect("Unable to open log file");
+        let reader = BufReader::new(file);
+
+        let mut counters = Vec::new();
+        let mut times = Vec::new();
+
+        for line in reader.lines() {
+            let line = line.expect("Unable to read line");
+            let parts: Vec<&str> = line.split('\t').collect();
+            if parts.len() == 4 {
+                let counter: u64 = parts[0].parse().expect("Unable to parse counter");
+                let time_taken_us: u128 = parts[3].parse().expect("Unable to parse time taken");
+
+                counters.push(counter);
+                times.push(time_taken_us);
+            }
+        }
+
+        // Plot the data
+        fs::create_dir_all("log/analyze").expect("Unable to create analyze directory");
+        let plot_filename = format!(
+            "log/analyze/plot_{}.png",
+            filename.replace("log/", "").replace(".txt", "")
+        );
+        let root = BitMapBackend::new(&plot_filename, (640, 480)).into_drawing_area();
+        root.fill(&WHITE).unwrap();
+
+        let mut chart = ChartBuilder::on(&root)
+            .caption("Time Taken vs Counter", ("sans-serif", 50).into_font())
+            .margin(5)
+            .x_label_area_size(30)
+            .y_label_area_size(30)
+            .build_cartesian_2d(
+                counters[0]..counters[counters.len() - 1],
+                0..*times.iter().max().unwrap() as u32,
+            )
+            .unwrap();
+
+        chart.configure_mesh().draw().unwrap();
+
+        chart
+            .draw_series(LineSeries::new(
+                counters
+                    .iter()
+                    .zip(times.iter())
+                    .map(|(&x, &y)| (x, y as u32)),
+                &RED,
+            ))
+            .unwrap()
+            .label("Time Taken")
+            .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &RED));
+
+        chart
+            .configure_series_labels()
+            .background_style(&WHITE)
+            .draw()
+            .unwrap();
     }
 }
 
