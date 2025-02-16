@@ -20,8 +20,8 @@ fn main() {
     let (tx, rx) = mpsc::channel();
 
     // Configuration for the balls
-    let ball1_config = (0.5, 1.0, 0.7, [-1.0, 5.0], [-0.3, 0.0]);
-    let ball2_config = (0.5, 1.0, 0.7, [1.0, 5.0], [0.1, 0.5]);
+    let ball1_config = (0.5, 1.0, 0.7, [0.0, 3.0, 0.0], [-0.1, 0.1, 0.2]);
+    let ball2_config = (0.5, 1.0, 0.7, [0.0, 3.0, 1.0], [0.1, 0.3, -0.1]);
 
     // Spawn the producer thread
     let producer = thread::spawn(move || {
@@ -33,8 +33,8 @@ fn main() {
             // Send the result and time taken to the consumer
             tx.send((positions, time_taken_us)).unwrap();
 
-            // Sleep to maintain 50Hz frequency
-            thread::sleep(Duration::from_millis(20));
+            // Sleep to maintain 1000Hz frequency
+            thread::sleep(Duration::from_millis(1));
         }
     });
 
@@ -51,7 +51,7 @@ fn main() {
                 // Convert Vec<Vector2<f32>> into a DVector<f64>
                 let data: Vec<f64> = result
                     .iter()
-                    .flat_map(|v| vec![v.x as f64, v.y as f64])
+                    .flat_map(|v| vec![v.x as f64, v.y as f64, v.z as f64])
                     .collect();
                 let dvec = DVector::from_vec(data);
                 consumer_logger.log(dvec.len(), &dvec, time_taken_us);

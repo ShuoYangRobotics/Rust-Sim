@@ -12,7 +12,8 @@ chrono = "0.4"
 plotters = "0.3"
 tempfile = "3.16.0"
 parry2d = "0.16.0"
-rapier2d = "0.21.0"
+rapier3d = "0.21.0"
+gnuplot = "0.0.37"
 
 [dev-dependencies]
 approx = "0.4"
